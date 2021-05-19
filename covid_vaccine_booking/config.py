@@ -1,0 +1,1 @@
+STORAGE_URL_BASE = "https://kvdb.io/ASth4wnvVDPkg2bdjsiqMN/"
