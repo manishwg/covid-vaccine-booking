@@ -81,8 +81,7 @@ class BookingData(object):
         else:
             self.collect_user_details()
             self.save_to_json_file_with_prompt(filename)
-
-
+        self.confirm_and_proceed()
 
 
     @property
@@ -372,3 +371,16 @@ class BookingData(object):
 
         self.data = self.collection_data
         return self.collection_data
+
+    def confirm_and_proceed(self):
+        print(
+            "\n================================= Confirm Info =================================\n"
+        )
+        self.display()
+
+        confirm = input("\nProceed with above info (y/n Default y) : ")
+        confirm = not confirm.strip().lower().startswith('n')
+        if confirm != "y":
+            print("Details not confirmed. Exiting process.")
+            os.system("pause")
+            sys.exit()

@@ -8,16 +8,21 @@ from inputimeout import inputimeout, TimeoutOccurred
 
 from .logger import log
 from .captcha import captcha_builder, captcha_builder_auto
-from .cowin_client_base import CoWinClientBase
-from .cowin_client_mixin_collect_user_details import CoWinCollectUserDetails
+from .cowin_client import CoWinClient
+from .booking_data import BookingData
 from .utils import *
 
 
-class Booking_Client(CoWinCollectUserDetails, CoWinClientBase):
+class BookingClient(object):
     """
     CoWin Client.
     """
 
+    def __init__(self, mobile) -> None:
+
+        self.mobile = mobile
+        self.client = CoWinClient(mobile=mobile)
+        self.booking_data = BookingData(mobile=mobile, cowin_client=self.client)
 
     def get_min_age(self, beneficiary_dtls):
         """

@@ -1,8 +1,7 @@
 # !/usr/bin/env python3
 import sys
 from .logger import log
-from .booking_data import BookingData
-from .cowin_client import CoWinClient
+from .booking_client import BookingClient
 global use_subprocess
 use_subprocess = True
 
@@ -26,44 +25,8 @@ try:
     # otp_pref = input("\nDo you want to enter OTP manually, instead of auto-read? \nRemember selecting n would require some setup described in README (y/n Default n): ")
     # otp_pref = otp_pref if otp_pref else "n"
     mobile = 9657830140
-    co = CoWinClient(mobile)
-    collected_details = BookingData( mobile=mobile, cowin_client=co,)
+    bc = BookingClient(mobile)
 
-
-    # if os.path.exists(filename):
-    #     print("\n=================================== Note ===================================\n")
-    #     print(f"Info from perhaps a previous run already exists in {filename} in this directory.")
-    #     print(f"IMPORTANT: If this is your first time running this version of the application, DO NOT USE THE FILE!")
-    #     try_file = input("Would you like to see the details and confirm to proceed? (y/n Default y): ")
-    #     try_file = try_file if try_file else 'y'
-
-    #     if try_file == 'y':
-    #         collected_details = get_saved_user_info(filename)
-    #         print("\n================================= Info =================================\n")
-    #         display_info_dict(collected_details)
-
-    #         file_acceptable = input("\nProceed with above info? (y/n Default n): ")
-    #         file_acceptable = file_acceptable if file_acceptable else 'n'
-
-    #         if file_acceptable != 'y':
-    #             collected_details = collect_user_details(request_header)
-    #             save_user_info(filename, collected_details)
-
-    #     else:
-    #         collected_details = collect_user_details(request_header)
-    #         save_user_info(filename, collected_details)
-
-    # else:
-    #     collected_details = collect_user_details(request_header)
-    #     save_user_info(filename, collected_details)
-    #     confirm_and_proceed(collected_details)
-    collected_details.display()
-    info = SimpleNamespace(**collected_details.data)
-
-    # token_valid = True
-    # while token_valid:
-    #     request_header = copy.deepcopy(base_request_header)
-    #     request_header["Authorization"] = f"Bearer {token}"
 
     #     # call function to check and book slots
     #     try:
