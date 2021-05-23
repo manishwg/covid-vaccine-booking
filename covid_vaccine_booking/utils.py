@@ -1,4 +1,5 @@
 
+from typing import Iterable
 import tabulate, copy, time, datetime, requests, sys, os, random
 import threading
 WARNING_BEEP_DURATION = (1000, 1000)
@@ -61,6 +62,17 @@ def display_table(dict_list):
     header = ["idx"] + list(dict_list[0].keys())
     rows = [[idx + 1] + list(x.values()) for idx, x in enumerate(dict_list)]
     print(tabulate.tabulate(rows, header, tablefmt="grid"))
+
+
+def select_list_item_by_csi(ls: Iterable, csi) -> list:
+        if isinstance(csi, str):
+            csi = csi.replace(' ', '')
+            select_ids = [int(idx) - 1 for idx in csi.split(",")]
+        elif isinstance(csi, Iterable[int]):
+            select_ids = input
+        else:
+            return []
+        return [ item for idx, item in enumerate(ls) if idx in select_ids]
 
 
 def display_info_dict(details):
