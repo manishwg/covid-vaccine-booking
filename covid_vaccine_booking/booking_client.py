@@ -1,7 +1,7 @@
 import uuid
 import tabulate, copy, time, datetime, requests, sys, os, random
 from collections import Counter
-from functools import partial
+from functools import cached_property, partial
 from datetime import datetime, timedelta
 from typing import List
 from inputimeout import inputimeout, TimeoutOccurred
@@ -22,25 +22,30 @@ class BookingClient(object):
 
         self.mobile = mobile
         self.client = CoWinClient(mobile=mobile)
-        self.booking_data = BookingData(mobile=mobile, cowin_client=self.client)
+        self.info = BookingData(mobile=mobile, cowin_client=self.client)
 
-    def get_min_age(self, beneficiary_dtls):
+    def get_start_date(self):
+        sd = self.info.start_date
+        if isinstance(sd, int) and sd in (1, 2):
+            return (datetime.datetime.today() + datetime.timedelta(days=sd-1)).strftime("%d-%m-%Y")
+        elif isinstance(sd, str):
+            return sd
+        else:
+            return datetime.datetime.today().strftime("%d-%m-%Y")
+
+    @cached_property
+    def min_age_booking(self):
         """
         This function returns a min age argument, based on age of all beneficiaries
         :param beneficiary_dtls:
         :return: min_age:int
         """
-        age_list = [item["age"] for item in beneficiary_dtls]
+        age_list = [item["age"] for item in self.info.beneficiary_ls]
         min_age = min(age_list)
         return min_age
 
-
-    def filter_centers_by_age(resp, min_age_booking):
-        if min_age_booking >= 45:
-            center_age_filter = 45
-        else:
-            center_age_filter = 18
-
+    def filter_centers_by_age(self, resp):
+        center_age_filter = 45 if self.min_age_booking >= 45 else 18
         if "centers" in resp:
             for center in list(resp["centers"]): 
                 if center["sessions"][0]['min_age_limit'] != center_age_filter:
@@ -48,15 +53,15 @@ class BookingClient(object):
 
         return resp
 
-    def viable_options(self, resp, minimum_slots, min_age_booking, fee_type):
+    def viable_options(self, resp,):
         options = []
         if len(resp["centers"]) >= 0:
             for center in resp["centers"]:
                 for session in center["sessions"]:
                     if (
-                        (session["available_capacity"] >= minimum_slots)
-                        and (session["min_age_limit"] <= min_age_booking)
-                        and (center["fee_type"] in fee_type)
+                        (session["available_capacity"] >= self.info.minimum_slots)
+                        and (session["min_age_limit"] <= self.min_age_booking)
+                        and (center["fee_type"] in self.info.fee_type)
                     ):
                         out = {
                             "name": center["name"],
@@ -78,15 +83,7 @@ class BookingClient(object):
         return options
 
 
-    def check_calendar_by_district(
-        self,
-        vaccine_type,
-        location_dtls,
-        start_date,
-        minimum_slots,
-        min_age_booking,
-        fee_type,
-    ):
+    def check_calendar_by_district(self):
         """
         This function
             1. Takes details required to check vaccination calendar
@@ -99,25 +96,25 @@ class BookingClient(object):
                 "==================================================================================="
             )
             today = datetime.datetime.today()
-            vaccine_type_param = {'vaccine': vaccine_type} if vaccine_type else {}
+            vaccine_type_param = {'vaccine': self.info.vaccine_type} if self.info.vaccine_type else {}
+            start_date = self.get_start_date()
             options = []
-            for location in location_dtls:
+            for location in self.info.location_ls:
                 params = {'district_id': location["district_id"], 'date':start_date}
                 params.update(vaccine_type_param)
-                resp = self.get_calendar_by_district(params=params)
-
+                resp = self.client.get_calendar_by_district(params=params)
                 if resp.status_code == 200:
                     resp = resp.json()
-                    resp = self.filter_centers_by_age(resp, min_age_booking)
+                    resp = self.filter_centers_by_age(resp)
                     if "centers" in resp:
                         print(
                             f"Centers available in {location['district_name']} from {start_date} as of {today.strftime('%Y-%m-%d %H:%M:%S')}: {len(resp['centers'])}"
                         )
-                        options += self.viable_options(resp, minimum_slots, min_age_booking, fee_type)
+                        options += self.viable_options(resp)
                 else:
                     pass
 
-            for location in location_dtls:
+            for location in self.info.location_ls:
                 if location["district_name"] in [option["district"] for option in options]:
                     for _ in range(2):
                         beep(location["alert_freq"], 150)
@@ -128,15 +125,7 @@ class BookingClient(object):
             beep(WARNING_BEEP_DURATION[0], WARNING_BEEP_DURATION[1])
 
 
-    def check_calendar_by_pincode(
-        self,
-        vaccine_type,
-        location_dtls,
-        start_date,
-        minimum_slots,
-        min_age_booking,
-        fee_type,
-    ):
+    def check_calendar_by_pincode(self):
         """
         This function
             1. Takes details required to check vaccination calendar
@@ -147,25 +136,26 @@ class BookingClient(object):
         try:
             print("===================================================================================")
             today = datetime.datetime.today()
-            vaccine_type_param = {'vaccine': vaccine_type} if vaccine_type else {}
+            vaccine_type_param = {'vaccine': self.info.vaccine_type} if self.info.vaccine_type else {}
+            start_date = self.get_start_date()
             options = []
-            for location in location_dtls:
+            for location in self.info.location_ls:
                 params = {'pincode': location["pincode"], 'date':start_date}
                 params.update(vaccine_type_param)
-                resp = self.get_calendar_by_pincode(params=params)
+                resp = self.client.get_calendar_by_pincode(params=params)
 
                 if resp.status_code == 200:
                     resp = resp.json()
-                    resp = self.filter_centers_by_age(resp, min_age_booking)
+                    resp = self.filter_centers_by_age(resp)
                     if "centers" in resp:
                         print(
                             f"Centers available in {location['pincode']} from {start_date} as of {today.strftime('%Y-%m-%d %H:%M:%S')}: {len(resp['centers'])}"
                         )
-                        options += self.viable_options(resp, minimum_slots, min_age_booking, fee_type)
+                        options += self.viable_options(resp)
                 else:
                     pass
 
-            for location in location_dtls:
+            for location in self.info.location_ls:
                 if int(location["pincode"]) in [option["pincode"] for option in options]:
                     for _ in range(2):
                         beep(location["alert_freq"], 150)
@@ -177,19 +167,20 @@ class BookingClient(object):
             beep(WARNING_BEEP_DURATION[0], WARNING_BEEP_DURATION[1])
 
 
-    def generate_captcha(self, captcha_automation, api_key):
+    def generate_captcha(self):
         print(
             "================================= GETTING CAPTCHA =================================================="
         )
-        resp = self.post_captcha()
+        resp = self.client.post_captcha()
         log.info(f'Captcha Response Code: {resp.status_code}')
-        if resp.status_code == 200 and captcha_automation=="n":
-            return captcha_builder(resp.json())
-        elif resp.status_code == 200 and captcha_automation=="y":
-            return captcha_builder_auto(resp.json(), api_key)
+        if resp.status_code == 200:
+            if self.info.captcha_automation:
+                return captcha_builder_auto(resp.json(), self.info.captcha_automation_api_key)
+            else:
+                return captcha_builder(resp.json())
 
 
-    def book_appointment(self, request_header, details, mobile, generate_captcha_pref, api_key=None):
+    def book_appointment(self, details):
         """
         This function
             1. Takes details in json format
@@ -199,7 +190,7 @@ class BookingClient(object):
         try:
             valid_captcha = True
             while valid_captcha:
-                captcha = self.generate_captcha(request_header, generate_captcha_pref, api_key)
+                captcha = self.generate_captcha()
             # os.system('say "Slot Spotted."')
                 details["captcha"] = captcha
 
@@ -207,7 +198,7 @@ class BookingClient(object):
                     "================================= ATTEMPTING BOOKING =================================================="
                 )
 
-                resp = self.post_booking(json=details)
+                resp = self.client.post_booking(json=details)
                 log.info(f"Booking Response Code: {resp.status_code}")
                 log.info(f"Booking Response : {resp.text}")
 
@@ -219,11 +210,8 @@ class BookingClient(object):
                     print(
                         "                        Hey, Hey, Hey! It's your lucky day!                       "
                     )
-                    print("\nPress any key thrice to exit program.")
                     # requests.put("https://kvdb.io/thofdz57BqhTCaiBphDCp/" + str(uuid.uuid4()), data={})
-                    os.system("pause")
-                    os.system("pause")
-                    os.system("pause")
+                    pause("\nPress any key thrice to exit program.", 3)
                     sys.exit()
 
                 elif resp.status_code == 400:
@@ -239,7 +227,7 @@ class BookingClient(object):
             beep(WARNING_BEEP_DURATION[0], WARNING_BEEP_DURATION[1])
 
 
-    def check_and_book(self, beneficiary_dtls, location_dtls, search_option, **kwargs):
+    def check_and_book(self, **kwargs):
         """
         This function
             1. Checks the vaccination calendar for available slots,
@@ -249,45 +237,11 @@ class BookingClient(object):
             5. Returns True or False depending on Token Validity
         """
         try:
-            min_age_booking = self.get_min_age(beneficiary_dtls)
 
-            minimum_slots = kwargs["min_slots"]
-            refresh_freq = kwargs["ref_freq"]
-            auto_book = kwargs["auto_book"]
-            start_date = kwargs["start_date"]
-            vaccine_type = kwargs["vaccine_type"]
-            fee_type = kwargs["fee_type"]
-            mobile = kwargs["mobile"]
-            captcha_automation = kwargs['captcha_automation']
-            captcha_automation_api_key = kwargs['captcha_automation_api_key']
-
-            if isinstance(start_date, int) and start_date == 2:
-                start_date = (
-                    datetime.datetime.today() + datetime.timedelta(days=1)
-                ).strftime("%d-%m-%Y")
-            elif isinstance(start_date, int) and start_date == 1:
-                start_date = datetime.datetime.today().strftime("%d-%m-%Y")
+            if self.info.search_option == 2:
+                options = self.check_calendar_by_district()
             else:
-                pass
-
-            if search_option == 2:
-                options = self.check_calendar_by_district(
-                    vaccine_type,
-                    location_dtls,
-                    start_date,
-                    minimum_slots,
-                    min_age_booking,
-                    fee_type,
-                )
-            else:
-                options = self.check_calendar_by_pincode(
-                    vaccine_type,
-                    location_dtls,
-                    start_date,
-                    minimum_slots,
-                    min_age_booking,
-                    fee_type,
-                )
+                options = self.check_calendar_by_pincode()
 
             if isinstance(options, bool):
                 return False
@@ -302,24 +256,17 @@ class BookingClient(object):
                 ),
             )
 
-            tmp_options = copy.deepcopy(options)
-            if len(tmp_options) > 0:
-                cleaned_options_for_display = []
-                for item in tmp_options:
-                    item.pop("session_id", None)
-                    item.pop("center_id", None)
-                    cleaned_options_for_display.append(item)
-
-                display_table(cleaned_options_for_display)
+            if len(options) > 0:
+                # display_table(cleaned_options_for_display)
+                display_table([{k:v for k, v in opt.items() if k not in ('session_id', 'center_id')} for opt in options])
                 randrow = random.randint(1, len(options))
                 randcol = random.randint(1, len(options[randrow - 1]["slots"]))
                 choice = str(randrow) + "." + str(randcol)
                 print("Random Rows.Column:" + choice)
 
             else:
-                for i in range(refresh_freq, 0, -1):
-                    msg = f"No viable options. Next update in {i} seconds.."
-                    print(msg, end="\r", flush=True)
+                for i in range(self.info.refresh_freq, 0, -1):
+                    print(f"No viable options. Next update in {i} seconds..", end="\r", flush=True)
                     sys.stdout.flush()
                     time.sleep(1)
                 choice = "."
@@ -341,10 +288,10 @@ class BookingClient(object):
 
                     new_req = {
                         "beneficiaries": [
-                            beneficiary["bref_id"] for beneficiary in beneficiary_dtls
+                            beneficiary["bref_id"] for beneficiary in self.info.beneficiary_ls
                         ],
                         "dose": 2
-                        if [beneficiary["status"] for beneficiary in beneficiary_dtls][0]
+                        if [beneficiary["status"] for beneficiary in self.info.beneficiary_ls][0]
                         == "Partially Vaccinated"
                         else 1,
                         "center_id": options[choice[0] - 1]["center_id"],
@@ -353,10 +300,10 @@ class BookingClient(object):
                     }
 
                     print(f"Booking with info: {new_req}")
-                    return self.book_appointment(new_req, mobile, captcha_automation, captcha_automation_api_key)
+                    return self.book_appointment(new_req)
 
                 except IndexError:
                     print("============> Invalid Option!")
-                    os.system("pause")
+                    pause()
                     pass
 

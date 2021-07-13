@@ -13,6 +13,7 @@ from .utils import (
     Beeper,
     display_table,
     select_list_item_by_csi,
+    pause,
 )
 from .config import (
     DATA_FILENAME_FORMAT,
@@ -53,8 +54,8 @@ class BookingData(object):
         self.client = cowin_client
         filename = DATA_FILENAME_DIR + DATA_FILENAME_FORMAT.format(mobile=mobile)
         filename =  os.path.expandvars(os.path.expanduser(filename))
-        print(filename)
-        os.system("pause")
+        # print(filename)
+        # pause()
 
         if os.path.exists(filename):
             print("\n=================================== Note ===================================\n")
@@ -81,7 +82,7 @@ class BookingData(object):
         else:
             self.collect_user_details()
             self.save_to_json_file_with_prompt(filename)
-        self.confirm_and_proceed()
+            self.confirm_and_proceed()
 
 
     @property
@@ -138,7 +139,7 @@ class BookingData(object):
         confirm = confirm if confirm else "y"
         if confirm != "y":
             print("Details not confirmed. Exiting process.")
-            os.system("pause")
+            pause()
             sys.exit()
 
     def select_beneficiaries(self):
@@ -154,7 +155,7 @@ class BookingData(object):
             beneficiaries = response.json()["beneficiaries"]
             if len(beneficiaries) == 0:
                 log.error("please add beneficiary to the account and try again. Exiting.")
-                os.system("pause")
+                pause()
                 sys.exit(1)
 
             refined_beneficiaries = []
@@ -195,11 +196,11 @@ class BookingData(object):
                         select_loop = False
                     else:
                         print(f"All beneficiaries in one attempt should have the same vaccine type. Found {len(vaccines.keys())}")
-                        # os.system("pause")
+                        # pause()
                         # sys.exit(1)
                 else:
                     print("There should be at least one beneficiary.")
-                    # os.system("pause")
+                    # pause()
 
             print(f"Selected beneficiaries: ")
             display_table(Selected_beneficiaries)
@@ -208,7 +209,7 @@ class BookingData(object):
 
         else:
             log.error(f"fetch beneficiaries response (code: {response.status_code} ): {response.text}")
-            os.system("pause")
+            pause()
             return []
 
     def select_vaccine_preference(self):
@@ -264,12 +265,12 @@ class BookingData(object):
 
             else:
                 log.error(f"fetch districts response (code: {resp_districts.status_code}): {resp_districts.text}")
-                os.system("pause")
+                pause()
                 sys.exit(1)
 
         else:
             log.error(f"fetch states response (code: {resp_states.status_code}): {resp_states.text}")
-            os.system("pause")
+            pause()
             sys.exit(1)
 
     def get_pincodes(self):
@@ -382,5 +383,5 @@ class BookingData(object):
         confirm = not confirm.strip().lower().startswith('n')
         if confirm != "y":
             print("Details not confirmed. Exiting process.")
-            os.system("pause")
+            pause()
             sys.exit()

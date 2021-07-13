@@ -2,6 +2,9 @@ import os
 import logging
 import logging.config
 import logging.handlers
+from rich.logging import RichHandler
+from  logging import StreamHandler
+from logging.handlers import SocketHandler
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(
@@ -33,82 +36,9 @@ class ThreadLogFilter(logging.Filter):
         return record.threadName == self.thread_name
 
 
-def start_thread_logging():
-    """
-    Add a log handler to separate file for current thread
-    """
-    thread_name = threading.Thread.getName(threading.current_thread())
-    log_file = '/tmp/perThreadLogging-{}.log'.format(thread_name)
-    log_handler = logging.FileHandler(log_file)
-
-    log_handler.setLevel(logging.DEBUG)
-
-    formatter = logging.Formatter(
-        "%(asctime)-15s"
-        "| %(threadName)-11s"
-        "| %(levelname)-5s"
-        "| %(message)s")
-    log_handler.setFormatter(formatter)
-
-    log_filter = ThreadLogFilter(thread_name)
-    log_handler.addFilter(log_filter)
-
-    logger = logging.getLogger()
-    logger.addHandler(log_handler)
-
-    return log_handler
-
-
-def stop_thread_logging(log_handler):
-    # Remove thread log handler from root logger
-    logging.getLogger().removeHandler(log_handler)
-
-    # Close the thread log handler so that the lock on log file can be released
-    log_handler.close()
-
-
-
-def config_root_logger():
-    log_file = '/tmp/perThreadLogging.log'
-
-    formatter = "%(asctime)-15s" \
-                "| %(threadName)-11s" \
-                "| %(levelname)-5s" \
-                "| %(message)s"
-
-    logging.config.dictConfig({
-        'version': 1,
-        'formatters': {
-            'root_formatter': {
-                'format': formatter
-            }
-        },
-        'handlers': {
-            'console': {
-                'level': 'INFO',
-                'class': 'logging.StreamHandler',
-                'formatter': 'root_formatter'
-            },
-            'log_file': {
-                'class': 'logging.FileHandler',
-                'level': 'DEBUG',
-                'filename': log_file,
-                'formatter': 'root_formatter',
-            }
-        },
-        'loggers': {
-            '': {
-                'handlers': [
-                    'console',
-                    'log_file',
-                ],
-                'level': 'DEBUG',
-                'propagate': True
-            }
-        }
-    })
-
-
+from rich.console import Console
+# error_console = Console(stderr=True)
+error_console = Console(stderr=True, style="bold red")
 
 # load config from file
 # logging.config.fileConfig('logging.ini', disable_existing_loggers=False)
@@ -132,7 +62,7 @@ logging.config.dictConfig({
             },
         },
         'detail': {
-            'format': '%(asctime)s [%(threadName)s] [%(name)s] [%(levelname)s] %(message)s    %(pathname)s:%(lineno)s(%(funcName)s)',
+            'format': '%(asctime)s [%(name)s] [%(levelname)s] %(message)s        (%(funcName)s):%(lineno)s',
         },
         'detail_colered': {
             '()': 'colorlog.ColoredFormatter',
@@ -145,6 +75,20 @@ logging.config.dictConfig({
                 'CRITICAL': 'bold_red',
             },
         },
+        'rich_formatter': {
+            'format': "%(message)s",
+        }
+
+    },
+    'filters': {
+        'main_thread_filter': {
+            '()': ThreadLogFilter,
+            'thread_name': 'MainThread',
+        },
+        'auth_thread_filter': {
+            '()': ThreadLogFilter,
+            'thread_name': 'AuthThread',
+        },
     },
     'handlers': {
         'console': {
@@ -152,22 +96,64 @@ logging.config.dictConfig({
             'level': 'DEBUG',
             'class': 'logging.StreamHandler',
         },
+        'main_thread_console': {
+            'formatter': 'minimal_colered',
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'filters': ['main_thread_filter',],
+        },
+        'auth_thread_console': {
+            'formatter': 'minimal_colered',
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'filters': ['auth_thread_filter',],
+        },
+        'rich_console': {
+            'formatter': 'rich_formatter',
+            'level': 'NOTSET',
+            # 'datefmt': "[%X]",
+            'class': 'rich.logging.RichHandler',
+            'filters': ['main_thread_filter',],
+        },
         'filehandler': {
             'formatter': 'detail',
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
             'filename': os.path.join(LOG_DIR, '{}.log'.format(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))),
         },
+        'main_thread_filehandler': {
+            'formatter': 'detail',
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            # 'filename': os.path.join(LOG_DIR, 'main_thread_{}.log'.format(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))),
+            'filename': os.path.join(LOG_DIR, 'main_thread_{}.log'),
+            'filters': ['main_thread_filter',],
+        },
+        'auth_thread_filehandler': {
+            'formatter': 'detail',
+            'level': 'DEBUG',
+            'class': 'logging.FileHandler',
+            # 'filename': os.path.join(LOG_DIR, 'auth_thread_{}.log'.format(datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))),
+            'filename': os.path.join(LOG_DIR, 'auth_thread.log'),
+            'filters': ['auth_thread_filter',],
+        },
+        'cutelog': {
+            'formatter': 'detail',
+            'level': 'DEBUG',
+            'class': 'logging.handlers.SocketHandler',
+            'host': '127.0.0.1',
+            'port': '19996',
+        },
     },
     'loggers': {
         'urllib3': {
             'level': 'WARNING',
-            'handlers': ['console', 'filehandler'],
+            'handlers': ['cutelog', 'main_thread_filehandler', 'auth_thread_filehandler'],
             'propagate': False,
         },
         'covid_vaccine_booking': {
-            'level': 'INFO',
-            'handlers': ['console', 'filehandler'],
+            'level': 'DEBUG',
+            'handlers': ['cutelog', 'main_thread_filehandler', 'auth_thread_filehandler'],
             'propagate': False,
         },
         '': {
@@ -178,5 +164,10 @@ logging.config.dictConfig({
 
     }
 })
+
+# FORMAT = "%(message)s"
+# logging.basicConfig(
+#     level="NOTSET", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()]
+# )
 
 log = logging.getLogger('covid_vaccine_booking')

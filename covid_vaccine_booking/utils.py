@@ -21,6 +21,19 @@ else:
     def beep(freq, duration):
         winsound.Beep(freq, duration)
 
+if sys.platform.startswith('win32'):
+    def _pause():
+        os.system("pause")
+else:
+    def _pause():
+        os.system('bash -c \'read -s -n 1\'')
+
+def pause(msg='Press any key to continue...', key_count=1):
+        # print(msg, end='')
+        print(msg)
+        for _ in range(key_count):
+            _pause()
+
 
 class Beeper(object):
     thread = None
@@ -97,7 +110,7 @@ def confirm_and_proceed(collected_details):
     confirm = confirm if confirm else "y"
     if confirm != "y":
         print("Details not confirmed. Exiting process.")
-        os.system("pause")
+        pause()
         sys.exit()
 
 

@@ -56,5 +56,5 @@ class CoWinClient(object):
 
 
 # if __name__ == "__main__":
-#     co = CoWinSession(9822511138)
+#     co = CoWinSession(mobile)
 #     co.get_beneficiaries()
